@@ -1,14 +1,15 @@
 [versions]
 agp = "8.3.2"
-kotlin = "1.9.0"
-coreKtx = "1.13.0"
+kotlin = "1.9.23"
+coreKtx = "1.13.1"
 junit = "4.13.2"
 junitVersion = "1.1.5"
 espressoCore = "3.5.1"
 lifecycleRuntimeKtx = "2.7.0"
 activityCompose = "1.9.0"
-composeBom = "2023.08.00"
+composeBom = "2024.05.00"
 cameraXVersion = "1.3.3"
+media3Version = "1.3.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,6 +30,9 @@ androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycl
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "cameraXVersion" }
 androidx-camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "cameraXVersion" }
 androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "cameraXVersion" }
+androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3Version" }
+androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3Version" }
+
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

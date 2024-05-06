@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.time.Duration.Companion.seconds
 
 class MirrorViewModel : ViewModel() {
     private val actionsMutable = MutableSharedFlow<MainAction>(replay = 1, extraBufferCapacity = 1)
@@ -43,8 +44,8 @@ class MirrorViewModel : ViewModel() {
             }
 
             is MainEvent.StartStopClicked -> onStartStop(event.context, event.lifecycleOwner)
-            MainEvent.ReplayClicked -> TODO()
-            MainEvent.DeleteClicked -> TODO()
+            is MainEvent.ReplayClicked -> onReplayClicked(event.context)
+            is MainEvent.DeleteClicked -> onDeleteClicked(event.context)
             is MainEvent.PreviewLifeCycle -> onLifecycleEvent(event.state)
         }
     }
@@ -100,6 +101,31 @@ class MirrorViewModel : ViewModel() {
         return File(dir, filename(1))
     }
 
+
+    private fun onReplayClicked(context: Context) {
+        val currentState = state.value
+        if (currentState.lastRecordingFile == null)  {
+            stateMutable.update { it.copy(lastRecordingFile = getSaveFile(context)) }
+        }
+        when (currentState.recordingScreenConfiguration) {
+            is RecordingScreenConfiguration.Replaying -> {
+                cameraRecorder.stopRecording()
+                setRecordingState(RecordingScreenConfiguration.Idle)
+            }
+            is RecordingScreenConfiguration.Idle -> {
+                setRecordingState(RecordingScreenConfiguration.Replaying(0L.seconds))
+            }
+            else -> Unit
+        }
+    }
+
+    private fun onDeleteClicked(context: Context) {
+        val file = state.value.lastRecordingFile ?: getSaveFile(context).also {
+            stateMutable.update { it.copy(lastRecordingFile = it.lastRecordingFile) }
+        }
+        file.delete()
+    }
+
     private fun RecordingScreenConfiguration.toIconAndText(): IconAndText {
         return when (this) {
             is RecordingScreenConfiguration.NotAvailable -> IconAndText(R.drawable.ic_rec, R.string.recording_not_available, false)
@@ -121,7 +147,7 @@ class MirrorViewModel : ViewModel() {
 data class IconAndText(val icon: Int, val text: Int, val enabled: Boolean = true)
 
 data class MirrorState(
-    val replayFile: File? = null,
+    val lastRecordingFile: File? = null,
     val recordingScreenConfiguration: RecordingScreenConfiguration = RecordingScreenConfiguration.NotAvailable,
     val recPauseIcon: IconAndText = IconAndText(R.drawable.ic_rec, R.string.recording_pause),
     val replayIcon: IconAndText = IconAndText(R.drawable.ic_replay, R.string.replay),
@@ -136,8 +162,8 @@ sealed class MainEvent {
     data object AppStarted : MainEvent()
     data class PermissionsMissing(val permissions: List<String>) : MainEvent()
     data class StartStopClicked(val context: Context, val lifecycleOwner: LifecycleOwner) : MainEvent()
-    data object ReplayClicked : MainEvent()
-    data object DeleteClicked : MainEvent()
+    data class ReplayClicked(val context: Context) : MainEvent()
+    data class DeleteClicked(val context: Context) : MainEvent()
     data class PreviewLifeCycle(val state: CameraState) : MainEvent()
 }
 
