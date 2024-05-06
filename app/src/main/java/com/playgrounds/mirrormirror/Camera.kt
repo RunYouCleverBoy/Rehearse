@@ -15,22 +15,13 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.util.Consumer
@@ -40,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 
 sealed class CameraState {
@@ -50,82 +42,62 @@ sealed class CameraState {
     data class Error(val message: String) : CameraState()
 }
 
-sealed class CameraUseCase {
-    data class Preview(val preview: androidx.camera.core.Preview) : CameraUseCase()
-    data class Recorder(val cameraRecorder: CameraRecorder, val preview: androidx.camera.core.Preview) : CameraUseCase()
-
-}
-
 @Composable
-fun CameraPreviewScreen(stopping: State<Boolean>, cameraUseCase: CameraUseCase) {
-    val lifecycleOwner = LocalLifecycleOwner.current
+fun CameraPreview(preview: Preview) {
     val context = LocalContext.current
     val previewView = remember {
         PreviewView(context)
     }
-    val isStopping by stopping
 
-    val preview: Preview by remember { derivedStateOf {
-        when (cameraUseCase) {
-            is CameraUseCase.Preview -> cameraUseCase.preview
-            is CameraUseCase.Recorder -> cameraUseCase.preview
-        }
-    } }
-
-    LaunchedEffect(cameraUseCase) {
-        val lensFacing = CameraSelector.LENS_FACING_FRONT
-        setupCamera(lensFacing, context, cameraUseCase, lifecycleOwner, preview)
+    LaunchedEffect(preview) {
         preview.setSurfaceProvider(previewView.surfaceProvider)
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        val alpha: Float by animateFloatAsState(if (isStopping) 0.9f else 0f, label = "alpha", animationSpec = tween(800))
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
-        if (isStopping) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .alpha(alpha)
-                    .background(Color.White)
-            )
-        }
     }
 }
 
-class CameraRecorder {
+class CameraRecorder(private val fileSizeLimitMB: Int = 512, private val durationLimit: Duration = 1.hours) {
+    data class CameraData(val preview: Preview)
     private var recording: Recording? = null
     private val recorderTag = "CameraRecorder"
     private val recorderMutableStateFlow = MutableStateFlow<CameraState>(CameraState.Idle)
     val recorderState: StateFlow<CameraState> = recorderMutableStateFlow
-    val previewUseCase = Preview.Builder().build()
-
-    private val Number.megabytes: Long get() = this.toLong() * 1024 * 1024
-    private val fileSizeLimit = 512.megabytes
-    private val durationLimit = 1.hours
+    private val previewUseCase = Preview.Builder().build()
+    val cameraData get() = CameraData(previewUseCase)
 
     private val qualitySelector = QualitySelector.from(
-        Quality.UHD,
+        Quality.SD,
         FallbackStrategy.higherQualityOrLowerThan(Quality.SD)
     )
 
-    private suspend fun setupCamera(
-        lensFacing: Int,
+    suspend fun setupCamera(
         context: Context,
-        cameraUseCase: CameraUseCase,
         lifecycleOwner: LifecycleOwner,
-        preview: Preview
+        lensFacing: Int = CameraSelector.LENS_FACING_FRONT,
+        targetFile: File? = null
     ) {
+        recorderMutableStateFlow.value = CameraState.Starting
         val cameraxSelector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
         val cameraProvider = withContext(Dispatchers.IO) {
             ProcessCameraProvider.getInstance(context).get()
         }
 
         cameraProvider.unbindAll()
-        val videoCapture = CameraRecorder().getVideoCapture()
-        when (cameraUseCase) {
-            is CameraUseCase.Recorder -> cameraProvider.bindToLifecycle(lifecycleOwner, cameraxSelector, videoCapture, preview)
-            is CameraUseCase.Preview -> cameraProvider.bindToLifecycle(lifecycleOwner, cameraxSelector, preview)
+        if (targetFile != null) {
+            val videoCapture = CameraRecorder().getVideoCapture()
+            addRecorderMediaToVideoCapture(videoCapture, context, targetFile)
+            cameraProvider.bindToLifecycle(lifecycleOwner, cameraxSelector, videoCapture, previewUseCase)
+        } else {
+            cameraProvider.bindToLifecycle(lifecycleOwner, cameraxSelector, previewUseCase)
         }
+    }
+
+    fun stopRecording() {
+        recording?.stop()
+        recording?.close()
+        recording = null
     }
 
     private fun getVideoCapture(): VideoCapture<Recorder> {
@@ -137,9 +109,9 @@ class CameraRecorder {
     }
 
     @SuppressLint("MissingPermission")
-    fun addRecorderMediaToVideoCapture(videoCapture: VideoCapture<Recorder>, context: Context, file: File) {
+    private fun addRecorderMediaToVideoCapture(videoCapture: VideoCapture<Recorder>, context: Context, file: File) {
         val fileOutputOptions = FileOutputOptions.Builder(file)
-            .setFileSizeLimit(fileSizeLimit)
+            .setFileSizeLimit(fileSizeLimitMB.toLong() * 1024L * 1024L)
             .setDurationLimitMillis(durationLimit.inWholeMilliseconds)
             .build()
         recording = videoCapture.output.prepareRecording(context, fileOutputOptions)
@@ -150,7 +122,7 @@ class CameraRecorder {
     private fun stateKeeper(): Consumer<VideoRecordEvent> {
         val recordingListener = Consumer<VideoRecordEvent> { event ->
             when (event) {
-                is VideoRecordEvent.Start -> recorderMutableStateFlow.value = CameraState.Starting
+                is VideoRecordEvent.Start -> recorderMutableStateFlow.value = CameraState.Active
                 is VideoRecordEvent.Finalize -> {
                     if (!event.hasError()) {
                         // update app internal state

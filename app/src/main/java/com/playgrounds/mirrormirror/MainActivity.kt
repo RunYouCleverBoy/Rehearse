@@ -5,7 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.camera.core.Preview
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.playgrounds.mirrormirror.ui.theme.MirrorMirrorTheme
@@ -89,23 +92,23 @@ class MainActivity : ComponentActivity() {
         Column(modifier = Modifier.fillMaxSize()) {
             VideoScreen(modifier = Modifier
                 .weight(1f)
-                .fillMaxSize(), state = state) {
-                onSendEvent(MainEvent.PreviewLifeCycle(it))
-            }
+                .fillMaxSize(), state = state)
             Controls(modifier = Modifier.fillMaxWidth(), state = state, onEvent = onSendEvent)
         }
     }
 
     @Composable
-    private fun VideoScreen(modifier: Modifier, state: MirrorState, onPreviewLifeCycle: (CameraState) -> Unit) {
+    private fun VideoScreen(modifier: Modifier, state: MirrorState) {
         Box(modifier = modifier) {
-            val shouldStop = remember(state.recordingState) { derivedStateOf { state.recordingState is RecordingState.Stopping } }
-            when (state.recordingState) {
-                is RecordingState.Recording, RecordingState.Stopping -> {
-                    CameraPreviewScreen(shouldStop, preview)
+            val showPreview = remember(state.recordingScreenConfiguration, state.cameraData) { state.recordingScreenConfiguration.shouldShowPreview }
+            when  {
+                showPreview -> {
+                    state.cameraData?.preview?.let { preview ->
+                        CameraPreview(preview)
+                    }
                 }
-                is RecordingState.Replaying -> ColorBox(Color.Green, "Replaying")
-                else -> ColorBox(color = Color.Gray, text = state.name)
+                state.recordingScreenConfiguration is RecordingScreenConfiguration.Replaying -> ColorBox(Color.Green, "Replaying")
+                else -> ColorBox(color = Color.Gray, text = state.recordingConfigurationName)
             }
         }
     }
@@ -121,8 +124,10 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun Controls(modifier: Modifier, state: MirrorState, onEvent: (MainEvent) -> Unit) {
+        val context = LocalContext.current
+        val lifecycleOwner = LocalLifecycleOwner.current
         Row(modifier, horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            InterchangeableIcon(state.recPauseIcon) { onEvent(MainEvent.StartStopClicked) }
+            InterchangeableIcon(state.recPauseIcon) { onEvent(MainEvent.StartStopClicked(context, lifecycleOwner)) }
             InterchangeableIcon(state.replayIcon) { onEvent(MainEvent.ReplayClicked) }
             InterchangeableIcon(state.deleteIcon) { onEvent(MainEvent.DeleteClicked) }
         }
