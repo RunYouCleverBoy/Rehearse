@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Mirror Mirror</string>
+    <string name="recording_pause">Rec/Pause</string>
+    <string name="replay">Replay</string>
+    <string name="delete">Delete/Cut</string>
+    <string name="stopped">Stopped</string>
+    <string name="recording_starting">Recording starting</string>
+    <string name="recording_stopping">Recording stopping</string>
+    <string name="recording_in_progress">Recording in progress</string>
+    <string name="replaying">Replaying</string>
+    <string name="stop_playback">Stop playback</string>
+    <string name="recording_not_available">Recording not available</string>
+</resources>

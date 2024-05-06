@@ -1,0 +1,139 @@
+package com.playgrounds.mirrormirror
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.camera.core.Preview
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import com.playgrounds.mirrormirror.ui.theme.MirrorMirrorTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
+
+class MainActivity : ComponentActivity() {
+    var onPermissionEvent = { _: Collection<String> -> }
+    private val activityResultLauncher =
+            registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+                val deniedPermissions = permissions.filter { !it.value }.keys
+                onPermissionEvent(deniedPermissions)
+            }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val viewModel by viewModels<MirrorViewModel>()
+        setContent {
+            LaunchedEffect(Unit) {
+                onPermissionEvent = { permissions ->
+                    viewModel.dispatchEvent(MainEvent.PermissionsMissing(permissions.toList()))
+                }
+
+                launch {
+                    delay(100.milliseconds)
+                    viewModel.dispatchEvent(MainEvent.AppStarted)
+                }
+
+                viewModel.actions.collect { action ->
+                    when (action) {
+                        is MainAction.RequestPermissions -> checkPermissions(action.permissions)
+                    }
+                }
+            }
+
+            MirrorMirrorTheme {
+                // A surface container using the 'background' color from the theme
+                Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                ) {
+                    val state by viewModel.state.collectAsState()
+                    MirrorMirrorScreen(state, viewModel::dispatchEvent)
+                }
+            }
+        }
+    }
+
+    private fun checkPermissions(permissions: Array<String>) {
+        if (permissions.all { checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }) {
+            onPermissionEvent(emptyList())
+        } else {
+            activityResultLauncher.launch(permissions)
+        }
+    }
+
+    @Composable
+    private fun MirrorMirrorScreen(state: MirrorState, onSendEvent: (MainEvent) -> Unit) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            VideoScreen(modifier = Modifier
+                .weight(1f)
+                .fillMaxSize(), state = state) {
+                onSendEvent(MainEvent.PreviewLifeCycle(it))
+            }
+            Controls(modifier = Modifier.fillMaxWidth(), state = state, onEvent = onSendEvent)
+        }
+    }
+
+    @Composable
+    private fun VideoScreen(modifier: Modifier, state: MirrorState, onPreviewLifeCycle: (CameraState) -> Unit) {
+        Box(modifier = modifier) {
+            val shouldStop = remember(state.recordingState) { derivedStateOf { state.recordingState is RecordingState.Stopping } }
+            when (state.recordingState) {
+                is RecordingState.Recording, RecordingState.Stopping -> {
+                    CameraPreviewScreen(shouldStop, preview)
+                }
+                is RecordingState.Replaying -> ColorBox(Color.Green, "Replaying")
+                else -> ColorBox(color = Color.Gray, text = state.name)
+            }
+        }
+    }
+
+    @Composable
+    private fun ColorBox(color: Color, text: String) {
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .background(color), contentAlignment = Alignment.Center) {
+            Text(text = text)
+        }
+    }
+
+    @Composable
+    private fun Controls(modifier: Modifier, state: MirrorState, onEvent: (MainEvent) -> Unit) {
+        Row(modifier, horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            InterchangeableIcon(state.recPauseIcon) { onEvent(MainEvent.StartStopClicked) }
+            InterchangeableIcon(state.replayIcon) { onEvent(MainEvent.ReplayClicked) }
+            InterchangeableIcon(state.deleteIcon) { onEvent(MainEvent.DeleteClicked) }
+        }
+    }
+
+    @Composable
+    private fun InterchangeableIcon(state: IconAndText, onClick: () -> Unit) {
+        IconButton(onClick = onClick, enabled = state.enabled) {
+            Image(painter = painterResource(id = state.icon), contentDescription = stringResource(id = state.text))
+        }
+    }
+}
+
+
