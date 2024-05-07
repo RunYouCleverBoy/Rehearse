@@ -1,7 +1,7 @@
 package com.playgrounds.mirrormirror
 
 import android.content.Context
-import androidx.lifecycle.LifecycleOwner
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -25,12 +25,20 @@ class MirrorViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
-            cameraRecorder.recorderState.collect { state -> when (state) {
+            launch {
+                state.collect{
+                    Log.d("CameraViewModel", "Screen configuration: ${it.recordingConfigurationName}")
+                }
+            }
+
+            cameraRecorder.recorderState.collect { state ->
+                when (state) {
                     CameraState.Active -> setRecordingState(RecordingScreenConfiguration.Recording(System.nanoTime()))
-                    is CameraState.Error -> setRecordingState(RecordingScreenConfiguration.NotAvailable)
+//                    is CameraState.Error -> setRecordingState(RecordingScreenConfiguration.NotAvailable)
                     CameraState.Idle -> setRecordingState(RecordingScreenConfiguration.Idle)
                     CameraState.Starting -> setRecordingState(RecordingScreenConfiguration.Starting)
                     CameraState.Stopping -> setRecordingState(RecordingScreenConfiguration.Stopping)
+                    else -> Unit
                 }
             }
         }
@@ -39,30 +47,25 @@ class MirrorViewModel : ViewModel() {
     fun dispatchEvent(event: MainEvent) {
         when (event) {
             is MainEvent.AppStarted -> requestPermissions()
-            is MainEvent.PermissionsMissing -> if (event.permissions.isEmpty()) {
+            is MainEvent.PermissionsMissing -> if (event.permissions.isNotEmpty()) {
                 setRecordingState(RecordingScreenConfiguration.Idle)
             }
 
-            is MainEvent.StartStopClicked -> onStartStop(event.context, event.lifecycleOwner)
+            is MainEvent.StartStopClicked -> onStartStop(event.context)
             is MainEvent.ReplayClicked -> onReplayClicked(event.context)
             is MainEvent.DeleteClicked -> onDeleteClicked(event.context)
-            is MainEvent.PreviewLifeCycle -> onLifecycleEvent(event.state)
-        }
-    }
-
-    private fun onLifecycleEvent(state: CameraState) {
-        when (state) {
-            CameraState.Idle -> setRecordingState(RecordingScreenConfiguration.Idle)
-            else -> Unit
+            is MainEvent.PreviewConfigurationApplied -> setRecordingState(RecordingScreenConfiguration.Recording(System.nanoTime()), event.configuration)
         }
     }
 
     private fun setRecordingState(state: RecordingScreenConfiguration, cameraData: CameraRecorder.CameraData? = null) {
-        stateMutable.update { it.copy(
-            recordingScreenConfiguration = state,
-            recPauseIcon = state.toIconAndText(),
-            replayIcon = state.toReplayButton(),
-            cameraData = cameraData ?: it.cameraData)
+        stateMutable.update {
+            it.copy(
+                recordingScreenConfiguration = state,
+                recPauseIcon = state.toIconAndText(),
+                replayIcon = state.toReplayButton(),
+                cameraData = cameraData ?: it.cameraData
+            )
         }
     }
 
@@ -70,33 +73,35 @@ class MirrorViewModel : ViewModel() {
         actionsMutable.tryEmit(MainAction.RequestPermissions(PermissionHandler.REQUIRED_PERMISSIONS))
     }
 
-    private fun onStartStop(context: Context, lifecycleOwner: LifecycleOwner) {
+    private fun onStartStop(context: Context) {
         val newState = when (val currentState = state.value.recordingScreenConfiguration) {
             is RecordingScreenConfiguration.Idle -> {
-                startRecording(context, lifecycleOwner)
-                RecordingScreenConfiguration.Starting
+                startRecording(context)
+                RecordingScreenConfiguration.Recording(System.nanoTime())
             }
+
             is RecordingScreenConfiguration.Recording -> {
                 cameraRecorder.stopRecording()
-                RecordingScreenConfiguration.Stopping
+                RecordingScreenConfiguration.Idle
             }
+
             else -> currentState
         }
         setRecordingState(newState, cameraData = cameraRecorder.cameraData)
     }
 
-    private fun startRecording(context: Context, lifecycleOwner: LifecycleOwner) {
+    private fun startRecording(context: Context) {
         viewModelScope.launch {
             val file = withContext(Dispatchers.IO) {
                 getSaveFile(context).also { it.delete() }
             }
 
-            cameraRecorder.setupCamera(context, lifecycleOwner, targetFile = file)
+            cameraRecorder.setupCamera(context, targetFile = file)
         }
     }
 
     private fun getSaveFile(context: Context): File {
-        fun filename(index: Int) = "recording_${index.toString().padStart(2,'0')}.mp4"
+        fun filename(index: Int) = "recording_${index.toString().padStart(2, '0')}.mp4"
         val dir = File(context.cacheDir, "recordings").also { it.mkdirs() }
         return File(dir, filename(1))
     }
@@ -104,7 +109,7 @@ class MirrorViewModel : ViewModel() {
 
     private fun onReplayClicked(context: Context) {
         val currentState = state.value
-        if (currentState.lastRecordingFile == null)  {
+        if (currentState.lastRecordingFile == null) {
             stateMutable.update { it.copy(lastRecordingFile = getSaveFile(context)) }
         }
         when (currentState.recordingScreenConfiguration) {
@@ -112,9 +117,11 @@ class MirrorViewModel : ViewModel() {
                 cameraRecorder.stopRecording()
                 setRecordingState(RecordingScreenConfiguration.Idle)
             }
+
             is RecordingScreenConfiguration.Idle -> {
                 setRecordingState(RecordingScreenConfiguration.Replaying(0L.seconds))
             }
+
             else -> Unit
         }
     }
@@ -130,7 +137,7 @@ class MirrorViewModel : ViewModel() {
         return when (this) {
             is RecordingScreenConfiguration.NotAvailable -> IconAndText(R.drawable.ic_rec, R.string.recording_not_available, false)
             is RecordingScreenConfiguration.Idle -> IconAndText(R.drawable.ic_rec, R.string.stopped, true)
-            is RecordingScreenConfiguration.Starting -> IconAndText(R.drawable.ic_stop, R.string.recording_starting, false)
+            is RecordingScreenConfiguration.Starting -> IconAndText(R.drawable.ic_stop, R.string.recording_starting, true)
             is RecordingScreenConfiguration.Recording -> IconAndText(R.drawable.ic_stop, R.string.recording_in_progress, true)
             is RecordingScreenConfiguration.Stopping -> IconAndText(R.drawable.ic_rec, R.string.recording_stopping, false)
             is RecordingScreenConfiguration.Replaying -> IconAndText(R.drawable.ic_rec, R.string.replaying, false)
@@ -161,10 +168,10 @@ data class MirrorState(
 sealed class MainEvent {
     data object AppStarted : MainEvent()
     data class PermissionsMissing(val permissions: List<String>) : MainEvent()
-    data class StartStopClicked(val context: Context, val lifecycleOwner: LifecycleOwner) : MainEvent()
+    data class StartStopClicked(val context: Context) : MainEvent()
     data class ReplayClicked(val context: Context) : MainEvent()
     data class DeleteClicked(val context: Context) : MainEvent()
-    data class PreviewLifeCycle(val state: CameraState) : MainEvent()
+    data class PreviewConfigurationApplied(val configuration: CameraRecorder.CameraData) : MainEvent()
 }
 
 sealed class MainAction {

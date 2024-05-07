@@ -22,13 +22,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.util.Consumer
-import androidx.lifecycle.LifecycleOwner
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.time.Duration
@@ -43,14 +45,27 @@ sealed class CameraState {
 }
 
 @Composable
-fun CameraPreview(preview: Preview) {
+fun CameraPreview(configuration: CameraRecorder.CameraData, onApplied: (CameraRecorder.CameraData) -> Unit = {}) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember {
         PreviewView(context)
     }
 
-    LaunchedEffect(preview) {
-        preview.setSurfaceProvider(previewView.surfaceProvider)
+    LaunchedEffect(lifecycleOwner, configuration) {
+        val cameraxSelector = CameraSelector.Builder().requireLensFacing(configuration.lensFacing).build()
+        val cameraProvider = withContext(Dispatchers.IO) {
+            ProcessCameraProvider.getInstance(context).get()
+        }
+
+        if (configuration.videoCapture != null) {
+            cameraProvider.bindToLifecycle(lifecycleOwner, cameraxSelector, configuration.videoCapture, configuration.preview)
+        } else {
+            cameraProvider.bindToLifecycle(lifecycleOwner, cameraxSelector, configuration.preview)
+        }
+
+        configuration.preview?.setSurfaceProvider(previewView.surfaceProvider)
+        onApplied(configuration)
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -59,45 +74,50 @@ fun CameraPreview(preview: Preview) {
 }
 
 class CameraRecorder(private val fileSizeLimitMB: Int = 512, private val durationLimit: Duration = 1.hours) {
-    data class CameraData(val preview: Preview)
+    data class CameraData(val lensFacing: Int, val videoCapture: VideoCapture<Recorder>?, val preview: Preview?)
+
     private var recording: Recording? = null
     private val recorderTag = "CameraRecorder"
     private val recorderMutableStateFlow = MutableStateFlow<CameraState>(CameraState.Idle)
     val recorderState: StateFlow<CameraState> = recorderMutableStateFlow
-    private val previewUseCase = Preview.Builder().build()
-    val cameraData get() = CameraData(previewUseCase)
+    var cameraData: CameraData = CameraData(CameraSelector.LENS_FACING_FRONT, null, Preview.Builder().build())
+        private set
 
     private val qualitySelector = QualitySelector.from(
         Quality.SD,
         FallbackStrategy.higherQualityOrLowerThan(Quality.SD)
     )
 
-    suspend fun setupCamera(
-        context: Context,
-        lifecycleOwner: LifecycleOwner,
-        lensFacing: Int = CameraSelector.LENS_FACING_FRONT,
-        targetFile: File? = null
-    ) {
-        recorderMutableStateFlow.value = CameraState.Starting
-        val cameraxSelector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
-        val cameraProvider = withContext(Dispatchers.IO) {
-            ProcessCameraProvider.getInstance(context).get()
-        }
-
-        cameraProvider.unbindAll()
-        if (targetFile != null) {
-            val videoCapture = CameraRecorder().getVideoCapture()
-            addRecorderMediaToVideoCapture(videoCapture, context, targetFile)
-            cameraProvider.bindToLifecycle(lifecycleOwner, cameraxSelector, videoCapture, previewUseCase)
-        } else {
-            cameraProvider.bindToLifecycle(lifecycleOwner, cameraxSelector, previewUseCase)
+    init {
+        CoroutineScope(Dispatchers.Main).launch {
+            recorderState.collect{
+                Log.d(recorderTag, "Camera state: $it")
+            }
         }
     }
 
+    fun setupCamera(
+        context: Context,
+        targetFile: File? = null
+    ) {
+        recorderMutableStateFlow.value = CameraState.Starting
+        val videoCapture: VideoCapture<Recorder>? = if (targetFile != null) {
+            CameraRecorder().getVideoCapture().also { it.setMediaSession(context, targetFile) }
+        } else {
+            null
+        }
+
+        cameraData = CameraData(CameraSelector.LENS_FACING_FRONT, videoCapture, cameraData.preview ?: Preview.Builder().build())
+        Log.v(recorderTag, "Camera setup complete")
+    }
+
     fun stopRecording() {
+        Log.v(recorderTag, "Stopping recording")
         recording?.stop()
         recording?.close()
         recording = null
+
+        cameraData = cameraData.copy(videoCapture = null)
     }
 
     private fun getVideoCapture(): VideoCapture<Recorder> {
@@ -109,18 +129,19 @@ class CameraRecorder(private val fileSizeLimitMB: Int = 512, private val duratio
     }
 
     @SuppressLint("MissingPermission")
-    private fun addRecorderMediaToVideoCapture(videoCapture: VideoCapture<Recorder>, context: Context, file: File) {
+    private fun VideoCapture<Recorder>.setMediaSession(context: Context, file: File) {
         val fileOutputOptions = FileOutputOptions.Builder(file)
             .setFileSizeLimit(fileSizeLimitMB.toLong() * 1024L * 1024L)
             .setDurationLimitMillis(durationLimit.inWholeMilliseconds)
             .build()
-        recording = videoCapture.output.prepareRecording(context, fileOutputOptions)
+        recording = output.prepareRecording(context, fileOutputOptions)
             .withAudioEnabled()
             .start(ContextCompat.getMainExecutor(context), stateKeeper())
     }
 
     private fun stateKeeper(): Consumer<VideoRecordEvent> {
         val recordingListener = Consumer<VideoRecordEvent> { event ->
+            Log.v(recorderTag, "Event: $event")
             when (event) {
                 is VideoRecordEvent.Start -> recorderMutableStateFlow.value = CameraState.Active
                 is VideoRecordEvent.Finalize -> {
