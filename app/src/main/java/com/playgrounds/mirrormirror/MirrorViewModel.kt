@@ -2,9 +2,11 @@ package com.playgrounds.mirrormirror
 
 import android.content.Context
 import android.util.Log
+import androidx.camera.video.RecordingStats
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -13,6 +15,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 
 class MirrorViewModel : ViewModel() {
@@ -24,24 +27,7 @@ class MirrorViewModel : ViewModel() {
     private val cameraRecorder = CameraRecorder()
 
     init {
-        viewModelScope.launch {
-            launch {
-                state.collect{
-                    Log.d("CameraViewModel", "Screen configuration: ${it.recordingConfigurationName}")
-                }
-            }
-
-            cameraRecorder.recorderState.collect { state ->
-                when (state) {
-                    CameraState.Active -> setRecordingState(RecordingScreenConfiguration.Recording(System.nanoTime()))
-//                    is CameraState.Error -> setRecordingState(RecordingScreenConfiguration.NotAvailable)
-                    CameraState.Idle -> setRecordingState(RecordingScreenConfiguration.Idle)
-                    CameraState.Starting -> setRecordingState(RecordingScreenConfiguration.Starting)
-                    CameraState.Stopping -> setRecordingState(RecordingScreenConfiguration.Stopping)
-                    else -> Unit
-                }
-            }
-        }
+        pipelineIncomingFlows()
     }
 
     fun dispatchEvent(event: MainEvent) {
@@ -54,7 +40,47 @@ class MirrorViewModel : ViewModel() {
             is MainEvent.StartStopClicked -> onStartStop(event.context)
             is MainEvent.ReplayClicked -> onReplayClicked(event.context)
             is MainEvent.DeleteClicked -> onDeleteClicked(event.context)
-            is MainEvent.PreviewConfigurationApplied -> setRecordingState(RecordingScreenConfiguration.Recording(System.nanoTime()), event.configuration)
+            is MainEvent.PreviewConfigurationApplied -> setRecordingState(RecordingScreenConfiguration.Recording(), event.configuration)
+        }
+    }
+
+    private fun pipelineIncomingFlows() {
+        fun <T> Flow<T>.launchCollect(action: (T) -> Unit) {
+            viewModelScope.launch {
+                collect { action(it) }
+            }
+        }
+
+        state.launchCollect(::logScreenConfiguration)
+        cameraRecorder.recorderStatistics.launchCollect(::dispatchRecordingStatistics)
+        cameraRecorder.recorderState.launchCollect(::dispatchVideoState)
+    }
+
+    private fun logScreenConfiguration(it: MirrorState) {
+        Log.d("CameraViewModel", "Screen configuration: ${it.recordingConfigurationName}")
+    }
+
+    private fun dispatchRecordingStatistics(statistics: RecordingStats?) {
+        fun Long.twoDigit() = toString().padStart(2, '0')
+        fun Long.format(): String {
+            val sec = nanoseconds.inWholeSeconds
+            val min = sec / 60
+            return "${min.twoDigit()}:${(sec % 60).twoDigit()}"
+        }
+
+        val recordingScreenConfiguration = state.value.recordingScreenConfiguration
+        if (recordingScreenConfiguration is RecordingScreenConfiguration.Recording) {
+            setRecordingState(recordingScreenConfiguration.copy(formattedTime = statistics?.recordedDurationNanos?.format() ?: ""), cameraData = cameraRecorder.cameraData)
+        }
+    }
+
+    private fun dispatchVideoState(state: CameraState) {
+        when (state) {
+            CameraState.Active -> setRecordingState(RecordingScreenConfiguration.Recording(""))
+            is CameraState.Error -> setRecordingState(RecordingScreenConfiguration.NotAvailable)
+            CameraState.Idle -> setRecordingState(RecordingScreenConfiguration.Idle)
+            CameraState.Starting -> setRecordingState(RecordingScreenConfiguration.Starting)
+            CameraState.Stopping -> setRecordingState(RecordingScreenConfiguration.Stopping)
         }
     }
 
@@ -74,30 +100,30 @@ class MirrorViewModel : ViewModel() {
     }
 
     private fun onStartStop(context: Context) {
-        val newState = when (val currentState = state.value.recordingScreenConfiguration) {
-            is RecordingScreenConfiguration.Idle -> {
-                startRecording(context)
-                RecordingScreenConfiguration.Recording(System.nanoTime())
-            }
+        viewModelScope.launch {
+            val newState = when (val currentState = state.value.recordingScreenConfiguration) {
+                is RecordingScreenConfiguration.Idle -> {
+                    startRecording(context)
+                    RecordingScreenConfiguration.Recording()
+                }
 
-            is RecordingScreenConfiguration.Recording -> {
-                cameraRecorder.stopRecording()
-                RecordingScreenConfiguration.Idle
-            }
+                is RecordingScreenConfiguration.Recording -> {
+                    cameraRecorder.stopRecording()
+                    RecordingScreenConfiguration.Idle
+                }
 
-            else -> currentState
+                else -> currentState
+            }
+            setRecordingState(newState, cameraData = cameraRecorder.cameraData)
         }
-        setRecordingState(newState, cameraData = cameraRecorder.cameraData)
     }
 
-    private fun startRecording(context: Context) {
-        viewModelScope.launch {
-            val file = withContext(Dispatchers.IO) {
-                getSaveFile(context).also { it.delete() }
-            }
-
-            cameraRecorder.setupCamera(context, targetFile = file)
+    private suspend fun startRecording(context: Context) {
+        val file = withContext(Dispatchers.IO) {
+            getSaveFile(context).also { it.delete() }
         }
+
+        cameraRecorder.setupCamera(context, targetFile = file)
     }
 
     private fun getSaveFile(context: Context): File {

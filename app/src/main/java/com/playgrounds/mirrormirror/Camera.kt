@@ -12,6 +12,7 @@ import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
 import androidx.camera.video.Recorder
 import androidx.camera.video.Recording
+import androidx.camera.video.RecordingStats
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
@@ -58,9 +59,12 @@ fun CameraPreview(configuration: CameraRecorder.CameraData, onApplied: (CameraRe
             ProcessCameraProvider.getInstance(context).get()
         }
 
+        cameraProvider.unbindAll()
         if (configuration.videoCapture != null) {
+            Log.v("CameraPreview", "Binding video capture")
             cameraProvider.bindToLifecycle(lifecycleOwner, cameraxSelector, configuration.videoCapture, configuration.preview)
         } else {
+            Log.v("CameraPreview", "Binding PREVIEW capture")
             cameraProvider.bindToLifecycle(lifecycleOwner, cameraxSelector, configuration.preview)
         }
 
@@ -78,6 +82,8 @@ class CameraRecorder(private val fileSizeLimitMB: Int = 512, private val duratio
 
     private var recording: Recording? = null
     private val recorderTag = "CameraRecorder"
+    private val recorderStatsMutableStateFlow = MutableStateFlow<RecordingStats?>(null)
+    val recorderStatistics: StateFlow<RecordingStats?> = recorderStatsMutableStateFlow
     private val recorderMutableStateFlow = MutableStateFlow<CameraState>(CameraState.Idle)
     val recorderState: StateFlow<CameraState> = recorderMutableStateFlow
     var cameraData: CameraData = CameraData(CameraSelector.LENS_FACING_FRONT, null, Preview.Builder().build())
@@ -101,10 +107,8 @@ class CameraRecorder(private val fileSizeLimitMB: Int = 512, private val duratio
         targetFile: File? = null
     ) {
         recorderMutableStateFlow.value = CameraState.Starting
-        val videoCapture: VideoCapture<Recorder>? = if (targetFile != null) {
-            CameraRecorder().getVideoCapture().also { it.setMediaSession(context, targetFile) }
-        } else {
-            null
+        val videoCapture: VideoCapture<Recorder>? = targetFile?.let {
+            getVideoCapture().also { videoCapture -> videoCapture.setMediaSession(context, targetFile) }
         }
 
         cameraData = CameraData(CameraSelector.LENS_FACING_FRONT, videoCapture, cameraData.preview ?: Preview.Builder().build())
@@ -113,7 +117,6 @@ class CameraRecorder(private val fileSizeLimitMB: Int = 512, private val duratio
 
     fun stopRecording() {
         Log.v(recorderTag, "Stopping recording")
-        recording?.stop()
         recording?.close()
         recording = null
 
@@ -157,7 +160,9 @@ class CameraRecorder(private val fileSizeLimitMB: Int = 512, private val duratio
                         recording = null
                     }
                 }
-
+                is VideoRecordEvent.Status -> {
+                    recorderStatsMutableStateFlow.value = event.recordingStats
+                }
                 else -> Log.v(recorderTag, "Unhandled event: $event")
             }
         }
