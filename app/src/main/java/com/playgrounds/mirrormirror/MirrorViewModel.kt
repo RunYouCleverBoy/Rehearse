@@ -6,11 +6,13 @@ import androidx.camera.video.RecordingStats
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,6 +46,7 @@ class MirrorViewModel : ViewModel() {
         }
     }
 
+    @OptIn(FlowPreview::class)
     private fun pipelineIncomingFlows() {
         fun <T> Flow<T>.launchCollect(action: (T) -> Unit) {
             viewModelScope.launch {
@@ -52,7 +55,7 @@ class MirrorViewModel : ViewModel() {
         }
 
         state.launchCollect(::logScreenConfiguration)
-        cameraRecorder.recorderStatistics.launchCollect(::dispatchRecordingStatistics)
+        cameraRecorder.recorderStatistics.debounce(800).launchCollect(::dispatchRecordingStatistics)
         cameraRecorder.recorderState.launchCollect(::dispatchVideoState)
     }
 
