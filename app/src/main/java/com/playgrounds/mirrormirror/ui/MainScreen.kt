@@ -1,5 +1,6 @@
 package com.playgrounds.mirrormirror.ui
 
+import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navOptions
 import com.playgrounds.mirrormirror.MainAction
 import com.playgrounds.mirrormirror.MainEvent
 import com.playgrounds.mirrormirror.MirrorState
@@ -35,51 +37,48 @@ import kotlinx.coroutines.flow.filterIsInstance
 
 @Composable
 fun MirrorMirrorScreen(state: MirrorState, onSendEvent: (MainEvent) -> Unit) {
-    val contentVerticalPadding by remember(state.tabsOpacity) { derivedStateOf { if (state.tabsOpacity < 1f) 0.dp else 40.dp } }
+    val contentVerticalPadding by remember(state.tabsOpacity) { derivedStateOf { stateByOpacity(state.tabsOpacity) } }
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter
     ) {
-        ScreenHost(
+        ContentScreen(
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = contentVerticalPadding), onSendEvent, state
         )
         if (state.tabsOpacity > 0f) {
-            val context = LocalContext.current
-            TabRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .alpha(state.tabsOpacity),
-                selectedTabIndex = state.selectedTabIndex
-            ) {
-                state.tabs.forEachIndexed { index, tabInfo ->
-                    LeadingIconTab(
-                        text = { Text(text = stringResource(id = tabInfo.title)) },
-                        icon = {
-                            Icon(painter = painterResource(id = tabInfo.companionIcon), contentDescription = stringResource(id = tabInfo.title))
-                        },
-                        selected = state.selectedTabIndex == index,
-                        onClick = { onSendEvent(MainEvent.TabSelected(context, index)) }
-                    )
-                }
-            }
+            MainTabRow(state, onSendEvent)
         }
     }
 }
 
+private fun stateByOpacity(opacity: Float) = if (opacity < 1f) 0.dp else 40.dp
+
 @Composable
-private fun ScreenHost(modifier: Modifier, onSendEvent: (MainEvent) -> Unit, state: MirrorState) {
+private fun ContentScreen(modifier: Modifier, onSendEvent: (MainEvent) -> Unit, state: MirrorState) {
     val viewModel = viewModel<MirrorViewModel>()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     LaunchedEffect(backStackEntry) {
         onSendEvent(MainEvent.BackStackEntryChanged(backStackEntry ?: return@LaunchedEffect))
+        Log.v("BackStackEntry", "Changed to: ${backStackEntry?.destination?.route}")
     }
 
     LaunchedEffect(Unit) {
+        navController.enableOnBackPressed(false)
         viewModel.actions.filterIsInstance<MainAction.NavigateTo>().collect {
-            navController.navigate(it.destination.path)
+            val currentDestination = navController.currentDestination
+            val route = currentDestination?.route ?: Screens.Viewfinder.path
+            navController.clearBackStack(route)
+            navController.navigate(
+                route = it.destination.path,
+                navOptions = navOptions {
+                    launchSingleTop = true
+                    popUpTo(
+                        route = route,
+                        popUpToBuilder = { inclusive = true })
+                })
         }
     }
 
@@ -95,6 +94,28 @@ private fun ScreenHost(modifier: Modifier, onSendEvent: (MainEvent) -> Unit, sta
         }
         composable(Screens.Replay.path) {
             ReplayScreen(state.lastRecordingFile)
+        }
+    }
+}
+
+@Composable
+private fun MainTabRow(state: MirrorState, onSendEvent: (MainEvent) -> Unit) {
+    TabRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(state.tabsOpacity),
+        selectedTabIndex = state.selectedTabIndex
+    ) {
+        val context = LocalContext.current
+        state.tabs.forEachIndexed { index, tabInfo ->
+            LeadingIconTab(
+                text = { Text(text = stringResource(id = tabInfo.title)) },
+                icon = {
+                    Icon(painter = painterResource(id = tabInfo.companionIcon), contentDescription = stringResource(id = tabInfo.title))
+                },
+                selected = state.selectedTabIndex == index,
+                onClick = { onSendEvent(MainEvent.TabSelected(context, index)) }
+            )
         }
     }
 }

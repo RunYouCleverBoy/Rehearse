@@ -6,18 +6,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import kotlinx.coroutines.delay
 import java.io.File
-import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun VideoPlayer(modifier: Modifier = Modifier, file: File) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val exoPlayer = ExoPlayer.Builder(context).build()
 
     // Create a MediaSource
@@ -29,7 +31,6 @@ fun VideoPlayer(modifier: Modifier = Modifier, file: File) {
     LaunchedEffect(mediaSource) {
         exoPlayer.setMediaItem(mediaSource)
         exoPlayer.prepare()
-        delay(100.milliseconds)
         exoPlayer.play()
     }
 
@@ -42,7 +43,19 @@ fun VideoPlayer(modifier: Modifier = Modifier, file: File) {
 
     // Manage lifecycle events
     DisposableEffect(Unit) {
+        val observer = object : DefaultLifecycleObserver {
+            override fun onPause(owner: LifecycleOwner) {
+                exoPlayer.pause()
+            }
+
+            override fun onResume(owner: LifecycleOwner) {
+                exoPlayer.play()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
         onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
             exoPlayer.release()
         }
     }
