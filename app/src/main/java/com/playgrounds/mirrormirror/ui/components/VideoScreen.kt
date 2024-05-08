@@ -3,52 +3,57 @@ package com.playgrounds.mirrormirror.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.playgrounds.mirrormirror.CameraPreview
 import com.playgrounds.mirrormirror.MainEvent
 import com.playgrounds.mirrormirror.MirrorState
-import com.playgrounds.mirrormirror.RecordingScreenConfiguration
-import com.playgrounds.mirrormirror.ui.utils.ColorBox
 
 @Composable
-fun VideoScreen(modifier: Modifier, state: MirrorState, onEvent: (MainEvent) -> Unit) {
+fun ViewFinderSubScreen(modifier: Modifier, state: MirrorState, onEvent: (MainEvent) -> Unit) {
+    val colorScheme = MaterialTheme.colorScheme
     Box(modifier = modifier) {
-        val showPreview = remember(state.recordingScreenConfiguration, state.cameraData) { state.recordingScreenConfiguration.shouldShowPreview }
-        when {
-            showPreview && state.cameraData != null -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-                    CameraPreview(state.cameraData) {
-                        onEvent(MainEvent.PreviewConfigurationApplied(it))
-                    }
-                    if (state.recordingScreenConfiguration is RecordingScreenConfiguration.Recording) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.Gray.copy(alpha = 0.2f))
-                                .padding(vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Text(text = state.recordingScreenConfiguration.formattedTime, color = Color.White, style = TextStyle(fontSize = 24.sp))
-                        }
-                    }
-                }
-            }
+        CameraPreview(configuration = state.cameraData)
+        ViewFinderOverlay(colorScheme, state, onEvent)
+    }
+}
 
-            state.recordingScreenConfiguration is RecordingScreenConfiguration.Replaying -> ReplayScreen(state.recordingScreenConfiguration.duration, state.lastRecordingFile)
-            else -> ColorBox(color = Color.Gray, text = state.recordingConfigurationName)
+@Composable
+private fun ViewFinderOverlay(colorScheme: ColorScheme, state: MirrorState, onEvent: (MainEvent) -> Unit) {
+    val context = LocalContext.current
+    val recPauseIcon = state.recPauseIcon
+    Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
+        IconButton(
+            modifier = Modifier
+                .size(80.dp)
+                .background(colorScheme.background.copy(alpha = 0.5f), CircleShape),
+            enabled = recPauseIcon.enabled,
+            onClick = {
+                onEvent(MainEvent.StartStopClicked(context))
+            }
+        ) {
+            Icon(
+                modifier = Modifier.size(50.dp),
+                painter = painterResource(id = recPauseIcon.icon),
+                contentDescription = stringResource(id = recPauseIcon.text),
+                tint = colorScheme.primary
+            )
         }
+        Spacer(modifier = Modifier.padding(50.dp))
     }
 }

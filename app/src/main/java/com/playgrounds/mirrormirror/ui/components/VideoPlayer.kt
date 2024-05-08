@@ -11,7 +11,9 @@ import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.delay
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun VideoPlayer(modifier: Modifier = Modifier, file: File) {
@@ -27,6 +29,8 @@ fun VideoPlayer(modifier: Modifier = Modifier, file: File) {
     LaunchedEffect(mediaSource) {
         exoPlayer.setMediaItem(mediaSource)
         exoPlayer.prepare()
+        delay(100.milliseconds)
+        exoPlayer.play()
     }
 
     AndroidView(

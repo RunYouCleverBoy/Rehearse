@@ -10,4 +10,6 @@
     <string name="replaying">Replaying</string>
     <string name="stop_playback">Stop playback</string>
     <string name="recording_not_available">Recording not available</string>
+    <string name="view_finder_tab">Record</string>
+    <string name="record">Rec</string>
 </resources>

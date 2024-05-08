@@ -46,7 +46,7 @@ sealed class CameraState {
 }
 
 @Composable
-fun CameraPreview(configuration: CameraRecorder.CameraData, onApplied: (CameraRecorder.CameraData) -> Unit = {}) {
+fun CameraPreview(configuration: CameraRecorder.CameraData) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember {
@@ -69,7 +69,6 @@ fun CameraPreview(configuration: CameraRecorder.CameraData, onApplied: (CameraRe
         }
 
         configuration.preview?.setSurfaceProvider(previewView.surfaceProvider)
-        onApplied(configuration)
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -86,7 +85,8 @@ class CameraRecorder(private val fileSizeLimitMB: Int = 512, private val duratio
     val recorderStatistics: StateFlow<RecordingStats?> = recorderStatsMutableStateFlow
     private val recorderMutableStateFlow = MutableStateFlow<CameraState>(CameraState.Idle)
     val recorderState: StateFlow<CameraState> = recorderMutableStateFlow
-    var cameraData: CameraData = CameraData(CameraSelector.LENS_FACING_FRONT, null, Preview.Builder().build())
+
+    var cameraData: CameraData = previewCameraData
         private set
 
     private val qualitySelector = QualitySelector.from(
@@ -168,5 +168,9 @@ class CameraRecorder(private val fileSizeLimitMB: Int = 512, private val duratio
         }
 
         return recordingListener
+    }
+
+    companion object {
+        val previewCameraData = CameraData(CameraSelector.LENS_FACING_FRONT, null, Preview.Builder().build())
     }
 }

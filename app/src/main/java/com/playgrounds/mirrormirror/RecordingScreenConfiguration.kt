@@ -1,13 +1,13 @@
 package com.playgrounds.mirrormirror
 
-import kotlin.time.Duration
+import com.playgrounds.mirrormirror.ui.Screens
 
 
-sealed class RecordingScreenConfiguration(val shouldShowPreview: Boolean) {
-    data object NotAvailable : RecordingScreenConfiguration(false)
-    data object Idle : RecordingScreenConfiguration(false)
-    data object Starting : RecordingScreenConfiguration(true)
-    data class Recording(val formattedTime: String = "") : RecordingScreenConfiguration(true)
-    data object Stopping : RecordingScreenConfiguration(true)
-    data class Replaying(val duration: Duration) : RecordingScreenConfiguration(false)
+data class TabInfo(val title: Int, val companionIcon: Int, val screen: Screens)
+
+sealed class RecordingScreenConfiguration {
+    data object NotAvailable : RecordingScreenConfiguration()
+    data object Idle : RecordingScreenConfiguration()
+    data object ShouldRecord : RecordingScreenConfiguration()
+    data class Recording(val formattedTime: String = "") : RecordingScreenConfiguration()
 }

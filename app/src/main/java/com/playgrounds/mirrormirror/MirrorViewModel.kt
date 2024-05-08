@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.camera.video.RecordingStats
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavBackStackEntry
+import com.playgrounds.mirrormirror.ui.Screens
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -18,10 +20,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.time.Duration.Companion.nanoseconds
-import kotlin.time.Duration.Companion.seconds
 
 class MirrorViewModel : ViewModel() {
-    private val actionsMutable = MutableSharedFlow<MainAction>(replay = 1, extraBufferCapacity = 1)
+    private val actionsMutable = MutableSharedFlow<MainAction>(replay = 1, extraBufferCapacity = 2)
     val actions: SharedFlow<MainAction> = actionsMutable
     private val stateMutable = MutableStateFlow(MirrorState())
     val state: StateFlow<MirrorState> = stateMutable
@@ -35,14 +36,43 @@ class MirrorViewModel : ViewModel() {
     fun dispatchEvent(event: MainEvent) {
         when (event) {
             is MainEvent.AppStarted -> requestPermissions()
+            MainEvent.WelcomeScreenDone -> onNavigateToMainScreen()
+            is MainEvent.BackStackEntryChanged -> onBackStackEntryChanged(event.entry)
             is MainEvent.PermissionsMissing -> if (event.permissions.isNotEmpty()) {
                 setRecordingState(RecordingScreenConfiguration.Idle)
             }
 
             is MainEvent.StartStopClicked -> onStartStop(event.context)
-            is MainEvent.ReplayClicked -> onReplayClicked(event.context)
             is MainEvent.DeleteClicked -> onDeleteClicked(event.context)
-            is MainEvent.PreviewConfigurationApplied -> setRecordingState(RecordingScreenConfiguration.Recording(), event.configuration)
+            is MainEvent.TabSelected -> onTabSelected(event)
+        }
+    }
+
+    private fun onNavigateToMainScreen() {
+        setRecordingState(RecordingScreenConfiguration.Idle, cameraData = cameraRecorder.cameraData)
+        actionsMutable.tryEmit(MainAction.NavigateTo(Screens.Viewfinder))
+    }
+
+    private fun onBackStackEntryChanged(entry: NavBackStackEntry) {
+        val route = entry.destination.route
+        val screen = Screens.entries.find { it.path == route } ?: return
+        stateMutable.update { it.copy(
+            tabsOpacity = when (screen) {
+                Screens.Viewfinder -> 0.5f
+                Screens.Replay -> 1f
+                else -> 0f
+            },
+            selectedTabIndex = state.value.tabs.indexOfFirst { tab -> tab.screen.path == route }) }
+    }
+
+    private fun onTabSelected(event: MainEvent.TabSelected) {
+        if (state.value.selectedTabIndex == event.index) return
+        actionsMutable.tryEmit(MainAction.NavigateTo(state.value.tabs[event.index].screen))
+
+        when (state.value.tabs[event.index].screen) {
+            Screens.Viewfinder -> setRecordingState(RecordingScreenConfiguration.Idle)
+            Screens.Replay -> stateMutable.update { it.copy(lastRecordingFile = it.lastRecordingFile ?: getSaveFile(event.context)) }
+            else -> Unit
         }
     }
 
@@ -80,21 +110,10 @@ class MirrorViewModel : ViewModel() {
     private fun dispatchVideoState(state: CameraState) {
         when (state) {
             CameraState.Active -> setRecordingState(RecordingScreenConfiguration.Recording(""))
-            is CameraState.Error -> setRecordingState(RecordingScreenConfiguration.NotAvailable)
+            is CameraState.Error -> setRecordingState(RecordingScreenConfiguration.Idle)
             CameraState.Idle -> setRecordingState(RecordingScreenConfiguration.Idle)
-            CameraState.Starting -> setRecordingState(RecordingScreenConfiguration.Starting)
-            CameraState.Stopping -> setRecordingState(RecordingScreenConfiguration.Stopping)
-        }
-    }
-
-    private fun setRecordingState(state: RecordingScreenConfiguration, cameraData: CameraRecorder.CameraData? = null) {
-        stateMutable.update {
-            it.copy(
-                recordingScreenConfiguration = state,
-                recPauseIcon = state.toIconAndText(),
-                replayIcon = state.toReplayButton(),
-                cameraData = cameraData ?: it.cameraData
-            )
+            CameraState.Starting -> Unit
+            CameraState.Stopping -> Unit
         }
     }
 
@@ -102,22 +121,23 @@ class MirrorViewModel : ViewModel() {
         actionsMutable.tryEmit(MainAction.RequestPermissions(PermissionHandler.REQUIRED_PERMISSIONS))
     }
 
+    private fun setRecordingState(recordingMode: RecordingScreenConfiguration, cameraData: CameraRecorder.CameraData = state.value.cameraData) {
+        stateMutable.update {
+            it.copy(
+                recordingScreenConfiguration = recordingMode,
+                recPauseIcon = recordingMode.toIconAndText(),
+                cameraData = cameraData
+            )
+        }
+    }
+
     private fun onStartStop(context: Context) {
         viewModelScope.launch {
-            val newState = when (val currentState = state.value.recordingScreenConfiguration) {
-                is RecordingScreenConfiguration.Idle -> {
-                    startRecording(context)
-                    RecordingScreenConfiguration.Recording()
-                }
-
-                is RecordingScreenConfiguration.Recording -> {
-                    cameraRecorder.stopRecording()
-                    RecordingScreenConfiguration.Idle
-                }
-
-                else -> currentState
+            when (state.value.recordingScreenConfiguration) {
+                is RecordingScreenConfiguration.Idle -> startRecording(context)
+                is RecordingScreenConfiguration.Recording -> cameraRecorder.stopRecording()
+                else -> Unit
             }
-            setRecordingState(newState, cameraData = cameraRecorder.cameraData)
         }
     }
 
@@ -127,6 +147,7 @@ class MirrorViewModel : ViewModel() {
         }
 
         cameraRecorder.setupCamera(context, targetFile = file)
+        setRecordingState(RecordingScreenConfiguration.ShouldRecord, cameraRecorder.cameraData)
     }
 
     private fun getSaveFile(context: Context): File {
@@ -135,25 +156,6 @@ class MirrorViewModel : ViewModel() {
         return File(dir, filename(1))
     }
 
-
-    private fun onReplayClicked(context: Context) {
-        val currentState = state.value
-        if (currentState.lastRecordingFile == null) {
-            stateMutable.update { it.copy(lastRecordingFile = getSaveFile(context)) }
-        }
-        when (currentState.recordingScreenConfiguration) {
-            is RecordingScreenConfiguration.Replaying -> {
-                cameraRecorder.stopRecording()
-                setRecordingState(RecordingScreenConfiguration.Idle)
-            }
-
-            is RecordingScreenConfiguration.Idle -> {
-                setRecordingState(RecordingScreenConfiguration.Replaying(0L.seconds))
-            }
-
-            else -> Unit
-        }
-    }
 
     private fun onDeleteClicked(context: Context) {
         val file = state.value.lastRecordingFile ?: getSaveFile(context).also {
@@ -166,17 +168,9 @@ class MirrorViewModel : ViewModel() {
         return when (this) {
             is RecordingScreenConfiguration.NotAvailable -> IconAndText(R.drawable.ic_rec, R.string.recording_not_available, false)
             is RecordingScreenConfiguration.Idle -> IconAndText(R.drawable.ic_rec, R.string.stopped, true)
-            is RecordingScreenConfiguration.Starting -> IconAndText(R.drawable.ic_stop, R.string.recording_starting, true)
+            is RecordingScreenConfiguration.ShouldRecord -> IconAndText(R.drawable.ic_stop, R.string.recording_in_progress, false)
             is RecordingScreenConfiguration.Recording -> IconAndText(R.drawable.ic_stop, R.string.recording_in_progress, true)
-            is RecordingScreenConfiguration.Stopping -> IconAndText(R.drawable.ic_rec, R.string.recording_stopping, false)
-            is RecordingScreenConfiguration.Replaying -> IconAndText(R.drawable.ic_rec, R.string.replaying, false)
         }
-    }
-
-    private fun RecordingScreenConfiguration.toReplayButton(): IconAndText = if (this is RecordingScreenConfiguration.Replaying) {
-        IconAndText(R.drawable.ic_stop, R.string.stop_playback, true)
-    } else {
-        IconAndText(R.drawable.ic_replay, R.string.replay, true)
     }
 }
 
@@ -188,7 +182,13 @@ data class MirrorState(
     val recPauseIcon: IconAndText = IconAndText(R.drawable.ic_rec, R.string.recording_pause),
     val replayIcon: IconAndText = IconAndText(R.drawable.ic_replay, R.string.replay),
     val deleteIcon: IconAndText = IconAndText(R.drawable.ic_delete, R.string.delete),
-    val cameraData: CameraRecorder.CameraData? = null
+    val cameraData: CameraRecorder.CameraData = CameraRecorder.previewCameraData,
+    val tabs: List<TabInfo> = listOf(
+        TabInfo(R.string.record, R.drawable.ic_rec, Screens.Viewfinder),
+        TabInfo(R.string.replay, R.drawable.ic_replay, Screens.Replay)
+    ),
+    val tabsOpacity: Float = 0.5f,
+    val selectedTabIndex: Int = 0,
 ) {
     val recordingConfigurationName: String
         get() = recordingScreenConfiguration.javaClass.simpleName
@@ -196,12 +196,14 @@ data class MirrorState(
 
 sealed class MainEvent {
     data object AppStarted : MainEvent()
+    data object WelcomeScreenDone : MainEvent()
+    data class BackStackEntryChanged(val entry: NavBackStackEntry) : MainEvent()
     data class PermissionsMissing(val permissions: List<String>) : MainEvent()
     data class StartStopClicked(val context: Context) : MainEvent()
-    data class ReplayClicked(val context: Context) : MainEvent()
     data class DeleteClicked(val context: Context) : MainEvent()
-    data class PreviewConfigurationApplied(val configuration: CameraRecorder.CameraData) : MainEvent()
+    data class TabSelected(val context: Context, val index: Int) : MainEvent()
 }
+
 
 sealed class MainAction {
     data class RequestPermissions(val permissions: Array<String>) : MainAction() {
@@ -213,4 +215,6 @@ sealed class MainAction {
 
         override fun hashCode(): Int = permissions.contentHashCode()
     }
+
+    data class NavigateTo(val destination: Screens) : MainAction()
 }
