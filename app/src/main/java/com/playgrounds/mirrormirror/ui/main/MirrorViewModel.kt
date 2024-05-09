@@ -9,10 +9,10 @@ import androidx.navigation.NavBackStackEntry
 import com.playgrounds.mirrormirror.R
 import com.playgrounds.mirrormirror.repos.camera.CameraRecorder
 import com.playgrounds.mirrormirror.repos.camera.CameraState
-import com.playgrounds.mirrormirror.repos.permission.PermissionHandler
 import com.playgrounds.mirrormirror.ui.RecordingScreenConfiguration
 import com.playgrounds.mirrormirror.ui.Screens
 import com.playgrounds.mirrormirror.ui.TabInfo
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -37,37 +37,19 @@ class MirrorViewModel : ViewModel() {
 
     init {
         pipelineIncomingFlows()
-        emit(MainAction.RequestPermissions.WithRationale)
     }
 
     fun dispatchEvent(event: MainEvent) {
         when (event) {
             MainEvent.WelcomeScreenDone -> onWelcomeScreenDone()
             is MainEvent.BackStackEntryChanged -> onBackStackEntryChanged(event.entry)
-            is MainEvent.PermissionsMissing -> onPermissionResult(event)
-
             is MainEvent.StartStopClicked -> onStartStop(event.context)
             is MainEvent.DeleteClicked -> onDeleteClicked(event.context)
             is MainEvent.TabSelected -> onTabSelected(event)
         }
     }
 
-    private fun onPermissionResult(event: MainEvent.PermissionsMissing) {
-        val remedy = event.remedy
-        if (remedy !is PermissionHandler.Remedy.AllGranted) {
-            setRecordingState(RecordingScreenConfiguration.NotAvailable)
-        }
-
-        when (remedy) {
-            PermissionHandler.Remedy.AllGranted -> emit(MainAction.NavigateTo(Screens.Viewfinder))
-            is PermissionHandler.Remedy.ShouldShowRationale -> emit(MainAction.RequestPermissions.WithRationale)
-            is PermissionHandler.Remedy.CanRequest -> emit(MainAction.RequestPermissions.WithoutRationale)
-            is PermissionHandler.Remedy.ShouldGoToSettings -> emit(MainAction.RequestPermissions.GoToSettings)
-        }
-    }
-
     private fun onWelcomeScreenDone() {
-        setRecordingState(RecordingScreenConfiguration.Idle, cameraData = cameraRecorder.cameraData)
         emit(MainAction.NavigateTo(Screens.Viewfinder))
     }
 
@@ -98,15 +80,15 @@ class MirrorViewModel : ViewModel() {
 
     @OptIn(FlowPreview::class)
     private fun pipelineIncomingFlows() {
-        fun <T> Flow<T>.launchCollect(action: (T) -> Unit) {
+        fun <T> Flow<T>.launchCollect(action: suspend CoroutineScope.(T) -> Unit) {
             viewModelScope.launch {
                 collect { action(it) }
             }
         }
 
-        state.launchCollect(::logScreenConfiguration)
-        cameraRecorder.recorderStatistics.debounce(800).launchCollect(::dispatchRecordingStatistics)
-        cameraRecorder.recorderState.launchCollect(::dispatchVideoState)
+        state.launchCollect { logScreenConfiguration(it) }
+        cameraRecorder.recorderStatistics.debounce(800).launchCollect { dispatchRecordingStatistics(it) }
+        cameraRecorder.recorderState.launchCollect{dispatchVideoState(it)}
     }
 
     private fun logScreenConfiguration(it: MirrorState) {
@@ -215,17 +197,11 @@ data class MirrorState(
 sealed class MainEvent {
     data object WelcomeScreenDone : MainEvent()
     data class BackStackEntryChanged(val entry: NavBackStackEntry) : MainEvent()
-    data class PermissionsMissing(val remedy: PermissionHandler.Remedy) : MainEvent()
     data class StartStopClicked(val context: Context) : MainEvent()
     data class DeleteClicked(val context: Context) : MainEvent()
     data class TabSelected(val context: Context, val index: Int) : MainEvent()
 }
 
 sealed class MainAction {
-    sealed class RequestPermissions : MainAction() {
-        data object WithoutRationale: RequestPermissions()
-        data object WithRationale: RequestPermissions()
-        data object GoToSettings: RequestPermissions()
-    }
     data class NavigateTo(val destination: Screens) : MainAction()
 }

@@ -27,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
+import com.playgrounds.mirrormirror.repos.permission.PermissionHandler
 import com.playgrounds.mirrormirror.ui.Screens
 import com.playgrounds.mirrormirror.ui.WelcomeScreen
 import com.playgrounds.mirrormirror.ui.camera.ViewFinderSubScreen
@@ -34,13 +35,13 @@ import com.playgrounds.mirrormirror.ui.player.ReplayScreen
 import kotlinx.coroutines.flow.filterIsInstance
 
 @Composable
-fun MirrorMirrorScreen(state: MirrorState, onSendEvent: (MainEvent) -> Unit) {
+fun MirrorMirrorScreen(permissionHandler: PermissionHandler, state: MirrorState, onSendEvent: (MainEvent) -> Unit) {
     val contentVerticalPadding by remember(state.tabsOpacity) { derivedStateOf { stateByOpacity(state.tabsOpacity) } }
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter
     ) {
-        ContentScreen(
+        ContentScreen(permissionHandler,
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = contentVerticalPadding), onSendEvent, state
@@ -54,7 +55,7 @@ fun MirrorMirrorScreen(state: MirrorState, onSendEvent: (MainEvent) -> Unit) {
 private fun stateByOpacity(opacity: Float) = if (opacity < 1f) 0.dp else 40.dp
 
 @Composable
-private fun ContentScreen(modifier: Modifier, onSendEvent: (MainEvent) -> Unit, state: MirrorState) {
+private fun ContentScreen(permissionHandler: PermissionHandler, modifier: Modifier, onSendEvent: (MainEvent) -> Unit, state: MirrorState) {
     val viewModel = viewModel<MirrorViewModel>()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -82,7 +83,7 @@ private fun ContentScreen(modifier: Modifier, onSendEvent: (MainEvent) -> Unit, 
 
     NavHost(modifier = modifier, navController = navController, startDestination = Screens.Welcome.path) {
         composable(Screens.Welcome.path) {
-            WelcomeScreen { event -> onSendEvent(event) }
+            WelcomeScreen(permissionHandler) { event -> onSendEvent(event) }
         }
         composable(Screens.Viewfinder.path) {
             ViewFinderSubScreen(
