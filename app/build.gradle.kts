@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.playgrounds.mirrormirror"
+    namespace = "com.rycbar.rehearse"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.playgrounds.mirrormirror"
+        applicationId = "com.rycbar.rehearse"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Mirror Mirror"
+rootProject.name = "Rehearse"
 include(":app")

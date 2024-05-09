@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Mirror Mirror</string>
+    <string name="app_name">Rehearse</string>
     <string name="recording_pause">Rec/Pause</string>
     <string name="replay">Replay</string>
     <string name="delete">Delete/Cut</string>
