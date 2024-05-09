@@ -1,6 +1,4 @@
-package com.playgrounds.mirrormirror
-
-import com.playgrounds.mirrormirror.ui.Screens
+package com.playgrounds.mirrormirror.ui
 
 
 data class TabInfo(val title: Int, val companionIcon: Int, val screen: Screens)

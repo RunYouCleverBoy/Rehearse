@@ -1,4 +1,4 @@
-package com.playgrounds.mirrormirror.ui.components
+package com.playgrounds.mirrormirror.ui.player
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,10 +47,6 @@ fun VideoPlayer(modifier: Modifier = Modifier, file: File) {
             override fun onPause(owner: LifecycleOwner) {
                 exoPlayer.pause()
             }
-
-            override fun onResume(owner: LifecycleOwner) {
-                exoPlayer.play()
-            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
 
@@ -59,5 +55,4 @@ fun VideoPlayer(modifier: Modifier = Modifier, file: File) {
             exoPlayer.release()
         }
     }
-
 }

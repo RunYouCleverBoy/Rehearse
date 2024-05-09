@@ -12,4 +12,6 @@
     <string name="recording_not_available">Recording not available</string>
     <string name="view_finder_tab">Record</string>
     <string name="record">Rec</string>
+    <string name="not_available">Not Available</string>
+    <string name="permission_rationale">Permission for video and audio recording are required, as the app shows preview and records audio.\nWith no video permissions you won\'t be able to view\nAny preview.\nYour videos are stored securely,\nand under no circumstance - they are not shared online\nOr even with any other app.</string>
 </resources>

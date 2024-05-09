@@ -1,4 +1,4 @@
-package com.playgrounds.mirrormirror
+package com.playgrounds.mirrormirror.ui.main
 
 import android.content.Context
 import android.util.Log
@@ -6,7 +6,13 @@ import androidx.camera.video.RecordingStats
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavBackStackEntry
+import com.playgrounds.mirrormirror.R
+import com.playgrounds.mirrormirror.repos.camera.CameraRecorder
+import com.playgrounds.mirrormirror.repos.camera.CameraState
+import com.playgrounds.mirrormirror.repos.permission.PermissionHandler
+import com.playgrounds.mirrormirror.ui.RecordingScreenConfiguration
 import com.playgrounds.mirrormirror.ui.Screens
+import com.playgrounds.mirrormirror.ui.TabInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -31,16 +37,14 @@ class MirrorViewModel : ViewModel() {
 
     init {
         pipelineIncomingFlows()
+        emit(MainAction.RequestPermissions.WithRationale)
     }
 
     fun dispatchEvent(event: MainEvent) {
         when (event) {
-            is MainEvent.AppStarted -> requestPermissions()
-            MainEvent.WelcomeScreenDone -> onNavigateToMainScreen()
+            MainEvent.WelcomeScreenDone -> onWelcomeScreenDone()
             is MainEvent.BackStackEntryChanged -> onBackStackEntryChanged(event.entry)
-            is MainEvent.PermissionsMissing -> if (event.permissions.isNotEmpty()) {
-                setRecordingState(RecordingScreenConfiguration.Idle)
-            }
+            is MainEvent.PermissionsMissing -> onPermissionResult(event)
 
             is MainEvent.StartStopClicked -> onStartStop(event.context)
             is MainEvent.DeleteClicked -> onDeleteClicked(event.context)
@@ -48,9 +52,23 @@ class MirrorViewModel : ViewModel() {
         }
     }
 
-    private fun onNavigateToMainScreen() {
+    private fun onPermissionResult(event: MainEvent.PermissionsMissing) {
+        val remedy = event.remedy
+        if (remedy !is PermissionHandler.Remedy.AllGranted) {
+            setRecordingState(RecordingScreenConfiguration.NotAvailable)
+        }
+
+        when (remedy) {
+            PermissionHandler.Remedy.AllGranted -> emit(MainAction.NavigateTo(Screens.Viewfinder))
+            is PermissionHandler.Remedy.ShouldShowRationale -> emit(MainAction.RequestPermissions.WithRationale)
+            is PermissionHandler.Remedy.CanRequest -> emit(MainAction.RequestPermissions.WithoutRationale)
+            is PermissionHandler.Remedy.ShouldGoToSettings -> emit(MainAction.RequestPermissions.GoToSettings)
+        }
+    }
+
+    private fun onWelcomeScreenDone() {
         setRecordingState(RecordingScreenConfiguration.Idle, cameraData = cameraRecorder.cameraData)
-        actionsMutable.tryEmit(MainAction.NavigateTo(Screens.Viewfinder))
+        emit(MainAction.NavigateTo(Screens.Viewfinder))
     }
 
     private fun onBackStackEntryChanged(entry: NavBackStackEntry) {
@@ -67,7 +85,7 @@ class MirrorViewModel : ViewModel() {
 
     private fun onTabSelected(event: MainEvent.TabSelected) {
         if (state.value.selectedTabIndex == event.index) return
-        actionsMutable.tryEmit(MainAction.NavigateTo(state.value.tabs[event.index].screen))
+        emit(MainAction.NavigateTo(state.value.tabs[event.index].screen))
 
         when (state.value.tabs[event.index].screen) {
             Screens.Viewfinder -> setRecordingState(RecordingScreenConfiguration.Idle)
@@ -117,10 +135,6 @@ class MirrorViewModel : ViewModel() {
         }
     }
 
-    private fun requestPermissions() {
-        actionsMutable.tryEmit(MainAction.RequestPermissions(PermissionHandler.REQUIRED_PERMISSIONS))
-    }
-
     private fun setRecordingState(recordingMode: RecordingScreenConfiguration, cameraData: CameraRecorder.CameraData = state.value.cameraData) {
         stateMutable.update {
             it.copy(
@@ -164,6 +178,8 @@ class MirrorViewModel : ViewModel() {
         file.delete()
     }
 
+    private fun emit(action: MainAction) = viewModelScope.launch { actionsMutable.emit(action) }
+
     private fun RecordingScreenConfiguration.toIconAndText(): IconAndText {
         return when (this) {
             is RecordingScreenConfiguration.NotAvailable -> IconAndText(R.drawable.ic_rec, R.string.recording_not_available, false)
@@ -195,26 +211,19 @@ data class MirrorState(
 }
 
 sealed class MainEvent {
-    data object AppStarted : MainEvent()
     data object WelcomeScreenDone : MainEvent()
     data class BackStackEntryChanged(val entry: NavBackStackEntry) : MainEvent()
-    data class PermissionsMissing(val permissions: List<String>) : MainEvent()
+    data class PermissionsMissing(val remedy: PermissionHandler.Remedy) : MainEvent()
     data class StartStopClicked(val context: Context) : MainEvent()
     data class DeleteClicked(val context: Context) : MainEvent()
     data class TabSelected(val context: Context, val index: Int) : MainEvent()
 }
 
-
 sealed class MainAction {
-    data class RequestPermissions(val permissions: Array<String>) : MainAction() {
-        override fun equals(other: Any?): Boolean = when {
-            this === other -> true
-            other !is RequestPermissions -> false
-            else -> permissions.contentEquals(other.permissions)
-        }
-
-        override fun hashCode(): Int = permissions.contentHashCode()
+    sealed class RequestPermissions : MainAction() {
+        data object WithoutRationale: RequestPermissions()
+        data object WithRationale: RequestPermissions()
+        data object GoToSettings: RequestPermissions()
     }
-
     data class NavigateTo(val destination: Screens) : MainAction()
 }

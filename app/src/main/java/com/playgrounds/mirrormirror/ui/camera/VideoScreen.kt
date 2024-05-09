@@ -1,4 +1,4 @@
-package com.playgrounds.mirrormirror.ui.components
+package com.playgrounds.mirrormirror.ui.camera
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,9 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.playgrounds.mirrormirror.CameraPreview
-import com.playgrounds.mirrormirror.MainEvent
-import com.playgrounds.mirrormirror.MirrorState
+import com.playgrounds.mirrormirror.ui.main.MainEvent
+import com.playgrounds.mirrormirror.ui.main.MirrorState
 
 @Composable
 fun ViewFinderSubScreen(modifier: Modifier, state: MirrorState, onEvent: (MainEvent) -> Unit) {

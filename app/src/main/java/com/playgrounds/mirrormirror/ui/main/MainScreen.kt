@@ -1,4 +1,4 @@
-package com.playgrounds.mirrormirror.ui
+package com.playgrounds.mirrormirror.ui.main
 
 import android.util.Log
 import androidx.compose.foundation.layout.Box
@@ -27,12 +27,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
-import com.playgrounds.mirrormirror.MainAction
-import com.playgrounds.mirrormirror.MainEvent
-import com.playgrounds.mirrormirror.MirrorState
-import com.playgrounds.mirrormirror.MirrorViewModel
-import com.playgrounds.mirrormirror.ui.components.ReplayScreen
-import com.playgrounds.mirrormirror.ui.components.ViewFinderSubScreen
+import com.playgrounds.mirrormirror.ui.Screens
+import com.playgrounds.mirrormirror.ui.WelcomeScreen
+import com.playgrounds.mirrormirror.ui.camera.ViewFinderSubScreen
+import com.playgrounds.mirrormirror.ui.player.ReplayScreen
 import kotlinx.coroutines.flow.filterIsInstance
 
 @Composable

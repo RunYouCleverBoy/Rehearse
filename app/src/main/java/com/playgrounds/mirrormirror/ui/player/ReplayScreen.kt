@@ -1,4 +1,4 @@
-package com.playgrounds.mirrormirror.ui.components
+package com.playgrounds.mirrormirror.ui.player
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
