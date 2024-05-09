@@ -84,10 +84,12 @@ class MirrorViewModel : ViewModel() {
     }
 
     private fun onTabSelected(event: MainEvent.TabSelected) {
-        if (state.value.selectedTabIndex == event.index) return
-        emit(MainAction.NavigateTo(state.value.tabs[event.index].screen))
+        val uiState = state.value
+        val destination = uiState.tabs[event.index].screen
+        if (uiState.selectedTabIndex == event.index) return
+        emit(MainAction.NavigateTo(destination))
 
-        when (state.value.tabs[event.index].screen) {
+        when (destination) {
             Screens.Viewfinder -> setRecordingState(RecordingScreenConfiguration.Idle)
             Screens.Replay -> stateMutable.update { it.copy(lastRecordingFile = it.lastRecordingFile ?: getSaveFile(event.context)) }
             else -> Unit
