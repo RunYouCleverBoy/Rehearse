@@ -5,10 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LeadingIconTab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -16,25 +12,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
 import com.rycbar.rehearse.repos.permission.PermissionHandler
 import com.rycbar.rehearse.ui.Screens
-import com.rycbar.rehearse.ui.WelcomeScreen
-import com.rycbar.rehearse.ui.camera.ViewFinderSubScreen
 import com.rycbar.rehearse.ui.main.mvi.MainAction
 import com.rycbar.rehearse.ui.main.mvi.MainEvent
 import com.rycbar.rehearse.ui.main.mvi.RehearseState
-import com.rycbar.rehearse.ui.player.ReplayScreen
 import kotlinx.coroutines.flow.filterIsInstance
 
 @Composable
@@ -84,40 +71,6 @@ private fun ContentScreen(permissionHandler: PermissionHandler, modifier: Modifi
         }
     }
 
-    NavHost(modifier = modifier, navController = navController, startDestination = Screens.Welcome.path) {
-        composable(Screens.Welcome.path) {
-            WelcomeScreen(permissionHandler) { event -> onSendEvent(event) }
-        }
-        composable(Screens.Viewfinder.path) {
-            ViewFinderSubScreen(
-                modifier = Modifier.fillMaxSize(), state = state,
-                onEvent = onSendEvent
-            )
-        }
-        composable(Screens.Replay.path) {
-            ReplayScreen(state.lastRecordingFile)
-        }
-    }
+    NavGraph(modifier, navController, permissionHandler, onSendEvent, state)
 }
 
-@Composable
-private fun MainTabRow(state: RehearseState, onSendEvent: (MainEvent) -> Unit) {
-    TabRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .alpha(state.tabsOpacity),
-        selectedTabIndex = state.selectedTabIndex
-    ) {
-        val context = LocalContext.current
-        state.tabs.forEachIndexed { index, tabInfo ->
-            LeadingIconTab(
-                text = { Text(text = stringResource(id = tabInfo.title)) },
-                icon = {
-                    Icon(painter = painterResource(id = tabInfo.companionIcon), contentDescription = stringResource(id = tabInfo.title))
-                },
-                selected = state.selectedTabIndex == index,
-                onClick = { onSendEvent(MainEvent.TabSelected(context, index)) }
-            )
-        }
-    }
-}

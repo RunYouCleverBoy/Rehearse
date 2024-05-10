@@ -1,7 +1,7 @@
 package com.rycbar.rehearse.ui
 
 enum class Screens(val path: String) {
-    Welcome("welcome"),
+    Permission("welcome"),
     Viewfinder("viewfinder"),
     Replay("replay")
 }
