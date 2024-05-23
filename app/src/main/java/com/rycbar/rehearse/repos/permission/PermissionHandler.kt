@@ -19,6 +19,8 @@ import kotlinx.coroutines.Deferred
 
 class PermissionHandler(private val componentActivity: ComponentActivity) {
     private var onPermissionEvent = { _: Collection<String> -> }
+
+    @Suppress("InvalidFragmentVersionForActivityResult")
     private val activityResultLauncher =
         componentActivity.registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             onPermissionResponse(permissions)
