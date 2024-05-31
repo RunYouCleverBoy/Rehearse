@@ -29,8 +29,9 @@ data class RehearseState(
 }
 
 sealed class MainEvent {
-    data object WelcomeScreenDone : MainEvent()
+    data object ReadyForMainScreen : MainEvent()
     data class BackStackEntryChanged(val entry: NavBackStackEntry) : MainEvent()
+    data class WelcomeScreenComplete(val permissionsLeft: Boolean) : MainEvent()
     data class StartStopClicked(val context: Context) : MainEvent()
     data class DeleteClicked(val context: Context) : MainEvent()
     data class TabSelected(val context: Context, val index: Int) : MainEvent()

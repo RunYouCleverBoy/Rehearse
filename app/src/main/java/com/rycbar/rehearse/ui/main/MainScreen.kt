@@ -28,13 +28,14 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
 import com.rycbar.rehearse.repos.permission.PermissionHandler
+import com.rycbar.rehearse.ui.PermissionScreen
 import com.rycbar.rehearse.ui.Screens
-import com.rycbar.rehearse.ui.WelcomeScreen
 import com.rycbar.rehearse.ui.camera.ViewFinderSubScreen
 import com.rycbar.rehearse.ui.main.mvi.MainAction
 import com.rycbar.rehearse.ui.main.mvi.MainEvent
 import com.rycbar.rehearse.ui.main.mvi.RehearseState
 import com.rycbar.rehearse.ui.player.ReplayScreen
+import com.rycbar.rehearse.ui.welcome.WelcomeScreen
 import kotlinx.coroutines.flow.filterIsInstance
 
 @Composable
@@ -84,9 +85,16 @@ private fun ContentScreen(permissionHandler: PermissionHandler, modifier: Modifi
         }
     }
 
+    val permissionsStillMissing: Boolean by remember {
+        derivedStateOf { permissionHandler.missingPermissions().isNotEmpty() }
+    }
+
     NavHost(modifier = modifier, navController = navController, startDestination = Screens.Welcome.path) {
         composable(Screens.Welcome.path) {
-            WelcomeScreen(permissionHandler) { event -> onSendEvent(event) }
+            WelcomeScreen(permissionsStillMissing) { event -> onSendEvent(event) }
+        }
+        composable(Screens.Permissions.path) {
+            PermissionScreen(permissionHandler) { event -> onSendEvent(event) }
         }
         composable(Screens.Viewfinder.path) {
             ViewFinderSubScreen(

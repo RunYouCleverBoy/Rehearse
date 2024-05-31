@@ -33,7 +33,7 @@ class PermissionHandler(private val componentActivity: ComponentActivity) {
 
     fun requestMissingPermissions(): Deferred<Remedy> {
         val remedyDeferred = CompletableDeferred<Remedy>()
-        val requestPermissions = REQUIRED_PERMISSIONS.filter { componentActivity.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }.toSet()
+        val requestPermissions = missingPermissions()
         if (requestPermissions.isEmpty()) {
             remedyDeferred.complete(Remedy.AllGranted)
         } else {
@@ -42,6 +42,11 @@ class PermissionHandler(private val componentActivity: ComponentActivity) {
         }
 
         return remedyDeferred
+    }
+
+    fun missingPermissions(): Set<String> {
+        val requestPermissions = REQUIRED_PERMISSIONS.filter { componentActivity.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }.toSet()
+        return requestPermissions
     }
 
     fun goToSettings() {

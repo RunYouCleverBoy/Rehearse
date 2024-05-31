@@ -43,7 +43,8 @@ class MainViewModel : ViewModel() {
 
     fun dispatchEvent(event: MainEvent) {
         when (event) {
-            MainEvent.WelcomeScreenDone -> onWelcomeScreenDone()
+            MainEvent.ReadyForMainScreen -> onReadyForMainScreen()
+            is MainEvent.WelcomeScreenComplete -> onWelcomeComplete(event.permissionsLeft)
             is MainEvent.BackStackEntryChanged -> onBackStackEntryChanged(event.entry)
             is MainEvent.StartStopClicked -> onStartStop(event.context)
             is MainEvent.DeleteClicked -> onDeleteClicked(event.context)
@@ -51,8 +52,16 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    private fun onWelcomeScreenDone() {
+    private fun onReadyForMainScreen() {
         emit(MainAction.NavigateTo(Screens.Viewfinder))
+    }
+
+    private fun onWelcomeComplete(permissionsLeft: Boolean) {
+        if (permissionsLeft) {
+            emit(MainAction.NavigateTo(Screens.Permissions))
+        } else {
+            onReadyForMainScreen()
+        }
     }
 
     private fun onBackStackEntryChanged(entry: NavBackStackEntry) {
