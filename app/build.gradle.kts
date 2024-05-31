@@ -11,8 +11,8 @@ android {
         applicationId = "com.rycbar.rehearse"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.1"
+        versionCode = versionName!!.split(".").fold(0) { acc, part -> acc * 100 + part.toInt() }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
