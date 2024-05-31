@@ -25,8 +25,8 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
-fun WelcomeScreen(permissionHandler: PermissionHandler, onMainEvent: (MainEvent) -> Unit) {
-    val welcomeViewModel = viewModel<OnboardingViewModel>()
+fun PermissionsScreen(permissionHandler: PermissionHandler, onMainEvent: (MainEvent) -> Unit) {
+    val welcomeViewModel = viewModel<PermissionsViewModel>()
 
     var showingDialog by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
     if (showingDialog != null) {
@@ -51,22 +51,22 @@ fun WelcomeScreen(permissionHandler: PermissionHandler, onMainEvent: (MainEvent)
         launch {
             welcomeViewModel.action.collect { action ->
                 when (action) {
-                    OnboardingViewModel.Action.GoToSettings -> permissionHandler.goToSettings()
-                    OnboardingViewModel.Action.MoveToNextScreen -> {
-                        onMainEvent(MainEvent.WelcomeScreenDone)
+                    PermissionsViewModel.Action.GoToSettings -> permissionHandler.goToSettings()
+                    PermissionsViewModel.Action.MoveToNextScreen -> {
+                        onMainEvent(MainEvent.ReadyForMainScreen)
                         return@collect
                     }
 
-                    OnboardingViewModel.Action.WithRationale -> {
+                    PermissionsViewModel.Action.WithRationale -> {
                         showingDialog = CompletableDeferred()
                         showingDialog?.await()
                         showingDialog = null
                     }
 
-                    OnboardingViewModel.Action.WithoutRationale -> Unit
+                    PermissionsViewModel.Action.WithoutRationale -> Unit
                 }
                 val remedy = permissionHandler.requestMissingPermissions().await()
-                welcomeViewModel.dispatchEvent(OnboardingViewModel.Event.PermissionsMissing(remedy))
+                welcomeViewModel.dispatchEvent(PermissionsViewModel.Event.PermissionsMissing(remedy))
             }
         }
         delay(100.milliseconds)

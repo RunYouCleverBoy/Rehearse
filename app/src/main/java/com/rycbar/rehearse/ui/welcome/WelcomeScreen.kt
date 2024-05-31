@@ -11,12 +11,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.rycbar.rehearse.R
+import com.rycbar.rehearse.repos.permission.PermissionHandler
 import com.rycbar.rehearse.ui.main.mvi.MainEvent
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 
 @Composable
-fun WelcomeScreen(permissionsStillMissing: Boolean, onMainEvent: (MainEvent) -> Unit) {
+fun WelcomeScreen(permissionHandler: PermissionHandler, onMainEvent: (MainEvent) -> Unit) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -29,6 +30,7 @@ fun WelcomeScreen(permissionsStillMissing: Boolean, onMainEvent: (MainEvent) -> 
         )
 
         LaunchedEffect(key1 = Unit) {
+            val permissionsStillMissing = permissionHandler.missingPermissions().isNotEmpty()
             val delay = if (permissionsStillMissing) 2.seconds else 0.7.seconds
             delay(delay)
             onMainEvent(MainEvent.WelcomeScreenComplete(permissionsStillMissing))

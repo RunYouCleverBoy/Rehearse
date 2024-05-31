@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 
-class OnboardingViewModel : ViewModel() {
+class PermissionsViewModel : ViewModel() {
     private val _action = MutableSharedFlow<Action>(1, 1)
     val action = _action.asSharedFlow()
 

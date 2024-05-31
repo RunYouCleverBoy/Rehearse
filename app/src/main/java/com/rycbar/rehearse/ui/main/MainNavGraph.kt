@@ -11,7 +11,7 @@ import com.rycbar.rehearse.ui.Screens
 import com.rycbar.rehearse.ui.camera.ViewFinderSubScreen
 import com.rycbar.rehearse.ui.main.mvi.MainEvent
 import com.rycbar.rehearse.ui.main.mvi.RehearseState
-import com.rycbar.rehearse.ui.onboarding.WelcomeScreen
+import com.rycbar.rehearse.ui.onboarding.PermissionsScreen
 import com.rycbar.rehearse.ui.player.ReplayScreen
 
 @Composable
@@ -22,9 +22,13 @@ fun NavGraph(
     onSendEvent: (MainEvent) -> Unit,
     state: RehearseState
 ) {
-    NavHost(modifier = modifier, navController = navController, startDestination = Screens.Permission.path) {
-        composable(Screens.Permission.path) {
-            WelcomeScreen(permissionHandler) { event -> onSendEvent(event) }
+    NavHost(modifier = modifier, navController = navController, startDestination = Screens.Welcome.path) {
+        composable(Screens.Welcome.path) {
+            com.rycbar.rehearse.ui.welcome.WelcomeScreen(permissionHandler) { event -> onSendEvent(event) }
+        }
+
+        composable(Screens.Permissions.path) {
+            PermissionsScreen(permissionHandler) { event -> onSendEvent(event) }
         }
         composable(Screens.Viewfinder.path) {
             ViewFinderSubScreen(

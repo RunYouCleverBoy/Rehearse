@@ -16,7 +16,7 @@ android {
         applicationId = "com.rycbar.rehearse"
         minSdk = 26
         targetSdk = 34
-        versionName = "1.0.0.1"
+        versionName = "1.0.0.2"
         versionCode = versionName?.split('.')?.fold(0) { acc, literal -> acc * 100 + literal.toInt() } ?: 1
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
