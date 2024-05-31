@@ -1,6 +1,11 @@
+import com.android.build.gradle.internal.tasks.FinalizeBundleTask
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.capitalizeAsciiOnly
+
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsKotlinAndroid)
+    alias(libs.plugins.googleGms)
+    alias(libs.plugins.googleFirebaseCrashlytics)
 }
 
 android {
@@ -11,12 +16,31 @@ android {
         applicationId = "com.rycbar.rehearse"
         minSdk = 26
         targetSdk = 34
-        versionName = "1.0.1"
-        versionCode = versionName!!.split(".").fold(0) { acc, part -> acc * 100 + part.toInt() }
+        versionName = "1.0.0.1"
+        versionCode = versionName?.split('.')?.fold(0) { acc, literal -> acc * 100 + literal.toInt() } ?: 1
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+
+        val finalName = "${applicationId?.replace(".", "_")}_$versionName($versionCode)"
+
+        android.applicationVariants.all variant@{
+            tasks.named<FinalizeBundleTask>("sign${name.capitalizeAsciiOnly()}Bundle") {
+                val file = finalBundleFile.asFile.get()
+                val suffix = file.extension
+                val finalFile = File(file.parentFile, "$finalName.$suffix")
+                finalBundleFile.set(finalFile)
+            }
+        }
+
+        // change app name block below
+        buildOutputs.all {
+            val variantOutputImpl = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            val suffix = variantOutputImpl.outputFileName.split(".").last()
+            val outputFilename = "$finalName.$suffix"
+            variantOutputImpl.outputFileName = outputFilename
         }
     }
 
@@ -69,9 +93,14 @@ dependencies {
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.navigation.compose)
 
+    implementation(platform(libs.google.firebase))
+    implementation(libs.google.firebase.crashlytics)
+    implementation(libs.google.firebase.analytics)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)

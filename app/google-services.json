@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "497644334825",
+    "project_id": "rehearse-e9248",
+    "storage_bucket": "rehearse-e9248.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:497644334825:android:7bc2cd8aeb83a692658a78",
+        "android_client_info": {
+          "package_name": "com.rycbar.rehearse"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZaoD3GVvInDLlk-XsArnEtum6OiPRTRw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
